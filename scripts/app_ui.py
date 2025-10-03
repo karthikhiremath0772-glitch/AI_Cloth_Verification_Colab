@@ -1,58 +1,59 @@
-
 import streamlit as st
 import os
 from PIL import Image
-from scripts.verify_return import verify_return  # Use your existing verify_return function
+from scripts.generate_qr import generate_qr_for_product
+from scripts.verify_return import verify_return  # make sure this returns (bool, similarity)
 
-PRODUCTS_PATH = "/content/drive/MyDrive/AI_Cloth_Verification/products"
-RETURNED_PATH = "/content/drive/MyDrive/AI_Cloth_Verification/returned"
+# Base directory
+BASE_DIR = '/content/drive/MyDrive/AI_Cloth_Verification'
 
-st.title("🧵 AI Cloth Verification Tool")
+st.title('👕 AI Cloth Verification Tool')
 
-# Upload Original Images
-st.header("Step 1: Upload Original Cloth Images")
-uploaded_front = st.file_uploader("Upload Front Image", type=["jpg", "png", "webp"], key="front")
-uploaded_back = st.file_uploader("Upload Back Image", type=["jpg", "png", "webp"], key="back")
-uploaded_tag = st.file_uploader("Upload Tag Image", type=["jpg", "png", "webp"], key="tag")
+# Menu
+menu = ['Generate QR', 'Verify Return']
+choice = st.sidebar.selectbox('Menu', menu)
 
-if uploaded_front and uploaded_back and uploaded_tag:
-    st.success("✅ Original images uploaded successfully!")
-    st.write("Now you can generate QR code linked to this cloth.")
+# -------------------- Generate QR --------------------
+if choice == 'Generate QR':
+    st.subheader('Generate QR for a Product')
+    product_name = st.text_input('Enter Product Name (e.g. red_tshirt)')
 
-# Generate QR
-st.header("Step 2: Generate QR Code")
-cloth_name = st.text_input("Enter Cloth Name (unique ID)")
-
-if st.button("Generate QR"):
-    if cloth_name and uploaded_front and uploaded_back and uploaded_tag:
-        cloth_dir = os.path.join(PRODUCTS_PATH, cloth_name)
-        os.makedirs(os.path.join(cloth_dir, "front"), exist_ok=True)
-        os.makedirs(os.path.join(cloth_dir, "back"), exist_ok=True)
-        os.makedirs(os.path.join(cloth_dir, "tag"), exist_ok=True)
-
-        Image.open(uploaded_front).save(os.path.join(cloth_dir, "front", "front1.jpg"))
-        Image.open(uploaded_back).save(os.path.join(cloth_dir, "back", "back1.jpg"))
-        Image.open(uploaded_tag).save(os.path.join(cloth_dir, "tag", "tag1.jpg"))
-
-        from scripts.generate_qr import generate_qr
-        generate_qr(cloth_name, cloth_dir)
-
-        st.success(f"✅ QR code generated and saved for {cloth_name}!")
-
-# Upload Returned Cloth
-st.header("Step 3: Upload Returned Cloth Image")
-returned_img_file = st.file_uploader("Upload Returned Cloth", type=["jpg", "png", "webp"], key="returned")
-
-if returned_img_file:
-    returned_img_path = os.path.join(RETURNED_PATH, returned_img_file.name)
-    Image.open(returned_img_file).save(returned_img_path)
-    st.success(f"✅ Returned cloth image saved as {returned_img_file.name}")
-
-    if st.button("Verify Cloth"):
-        result, similarity = verify_return(returned_img_path)
-        st.subheader("Verification Result")
-        st.write(f"Similarity: {similarity:.2f}%")
-        if result:
-            st.success("✅ ORIGINAL PRODUCT")
+    if st.button('Generate QR'):
+        if not product_name:
+            st.error("❌ Please enter a product name")
         else:
-            st.error("❌ FAKE PRODUCT")
+            product_folder = os.path.join(BASE_DIR, 'products', product_name)
+            qr_path = generate_qr_for_product(product_name, product_folder)
+            st.success(f'✅ QR Code generated: {qr_path}')
+            st.image(qr_path, caption='Generated QR Code')
+
+# -------------------- Verify Return --------------------
+elif choice == 'Verify Return':
+    st.subheader('Verify Returned Product')
+    product_name = st.text_input('Enter Product Name (e.g. red_tshirt)')
+    uploaded_file = st.file_uploader('Upload Return Image', type=['jpg', 'jpeg', 'png'])
+
+    if uploaded_file is not None and st.button('Verify'):
+        if not product_name:
+            st.error("❌ Please enter a product name")
+        else:
+            # Save uploaded return image
+            returned_folder = os.path.join(BASE_DIR, 'returned')
+            os.makedirs(returned_folder, exist_ok=True)
+            return_path = os.path.join(returned_folder, uploaded_file.name)
+            with open(return_path, 'wb') as f:
+                f.write(uploaded_file.getbuffer())
+
+            # Check if product exists
+            product_folder = os.path.join(BASE_DIR, 'products', product_name)
+            if not os.path.exists(product_folder):
+                st.error("❌ Product folder not found!")
+            else:
+                try:
+                    result, score = verify_return(return_path, product_folder)
+                    if result:
+                        st.success(f'✅ Verified! Similarity: {score:.2f}')
+                    else:
+                        st.error(f'❌ Verification Failed. Similarity: {score:.2f}')
+                except Exception as e:
+                    st.error(f"❌ Verification error: {str(e)}")

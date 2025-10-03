@@ -1,8 +1,6 @@
 streamlit
-opencv-python
-torch
-torchvision
-qrcode[pil]
-pyzbar
 numpy
 Pillow
+qrcode
+
+
